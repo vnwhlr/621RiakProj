@@ -1,0 +1,12 @@
+#my-profile
+  %a{:href => ... }
+    %img#my-avatar.pure-img{:src => user-avatarurl}
+  %h3#my-name.user-name = @username
+  %h5#my-handle.user-handle = @handle
+  .pure-g
+    #my-following.pure-u-1-2
+      %h5.followlabel Following
+      %h4#followingcount.followcount [followcount]
+    #my-followers.pure-u-1-2
+      %h5.followlabel Followers
+      %h4#followercount.followcount [followercount]

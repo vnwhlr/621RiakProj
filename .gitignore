@@ -1,0 +1,9 @@
+/src/dbscripts
+/src/hooks
+/planning
+www/css/pure
+*.swp
+*.swo
+*.un~
+*~
+
