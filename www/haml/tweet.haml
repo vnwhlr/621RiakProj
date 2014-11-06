@@ -1,10 +1,15 @@
-.tweet.pure-g
-  .avatar-wrapper.pure-u-1-4.pure-u-md-1-8
-    %img.author-avatar{:alt => "img/common/missingurl", :src => author_avatarurl}
-  .content.pure-u-3-4.pure-u-md-7-8
-    .metadata.pure-g
-      %h5.pure-u-1-3.user-name= author_name
-      %h4.pure-u-1-3.user-handle= author_handle
-      %h6.pure-u-1-3.tweet-timestamp= timestamp
-    .body-wrapper
-      %p.body= content
+%a{href => url('/user/')#{handle}}
+  .tweet.pure-g
+    .avatar-wrapper.pure-u-1-4.pure-u-md-1-8
+        %img.author-avatar{:alt => "img/common/missing_avatar.jpg", :src => avatar_url}
+    .content.pure-u-3-4.pure-u-md-7-8
+      .metadata.pure-g
+        %h5.pure-u-1-3.user-name 
+          #{username}
+        %h4.pure-u-1-3.user-handle
+          @#{handle}
+        %h6.pure-u-1-3.tweet-timestamp
+          #{timestamp}
+      .body-wrapper
+        %p.body
+          #{body}

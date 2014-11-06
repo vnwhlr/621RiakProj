@@ -1,24 +1,35 @@
-require 'sinatra'
-
 require 'RiakClientInstance'
 #gem install sinatra
 
-#shamelessly stolen from http://www.sinatrarb.com/faq.html#auth
-helpers do
-  def protected!
-    return if authorized?
-    headers['WWW-Authenticate'] = 'Basic realm="AuthorizationRequired"'
-    halt 401, "Not authorized\n"
-  end
+require 'sinatra'
+require 'warden'
 
-  def authorized?
-    @auth ||=  Rack::Auth::Basic::Request.new(request.env)
-    @auth.provided? and @auth.basic? and @auth.credentials and validCredentials? @auth.credentials
-  end
+class BleaterApp < Sinatra::Application
 
-  def validCredentials? credentials
-     client.validateCredentials credentials[0] credentials[1]
+get '/login' do
+  haml :login
+end
+
+post '/session' do
+  if authorized?
+    redirect "/"
+  else
+    redirect "/login"
   end
+end
+
+post '/unauthenticated' do
+  env['warden'].authenticate!
+  if env['warden'].authenticated?
+    redirect '/'
+  else
+    redirect '/login'
+  end
+end
+
+get '/logout' do 
+  env['warden'].logout
+  redirect '/login'
 end
 
 get '/api/timeline/:userid' do
@@ -30,6 +41,7 @@ get '/api/tweets/:userid' do
 end
 
 post '/api/tweet' do
+  authenticated?
   postTweet params[:userid] req.body
 end
 
@@ -38,10 +50,12 @@ get '/api/profile/:userid' do
 end
 
 post '/api/follow' do
+  authenticated?
   followUser request["follower"]  request["followee"]
 end
 
 post '/api/unfollow' do
+  authenticated?
   unfollowUser request["unfollower"] request["unfollowee"]
 end
 
@@ -54,6 +68,10 @@ post '/api/newuser' do
     "password" : request["password"]
   }
   createUser uinfo
+end
+
+post '/api/login' do
+  validateLogin
 end
 
 get '/' do
@@ -76,4 +94,23 @@ end
 template :layout do
   #menu
   #yield
+end
+
+use Rack::Session::Cookie
+
+use Warden::Manager do |config|
+    config.default_strategies :password
+    # Route to redirect to when warden.authenticate! returns a false answer.gg
+    config.failure_app = self
+    config.serialize_into_session{ |id| id }
+    config.serialize_from_session{ |id| id }
+end
+
+
+    Warden::Strategies.add(:password) do 
+      def authenticate!
+        user = client.validateCredentials params["email"] params["password"]
+        !!user ? success!(user) : fail!(user)
+      end
+
 end

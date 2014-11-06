@@ -89,11 +89,36 @@ a {
 #my-profile {
 }
 
+#my-profile .following-profile-button {
+  width: 100px;
+  height: 50px;
+}
+
+.following-button {
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    box-shadow: none;
+    border-radius: 5px;
+}
+
+.is-following {
+  background : red;
+}
+
+.is-not-following {
+  background : blue;
+}
+
+.is-self {
+  disabled : true; 
+}
+
 #my-avatar {
   width: 128px;
   height: 128px;
   display: block;
   margin: 0 auto;
+  border-radius: 20px;
 }
 
 #my-profile .user-name, .user-handle, .followlabel, .followcount {

@@ -1,12 +1,18 @@
 #my-profile
-  %a{:href => ... }
-    %img#my-avatar.pure-img{:src => user-avatarurl}
-  %h3#my-name.user-name = @username
-  %h5#my-handle.user-handle = @handle
+  %img#my-avatar.pure-img(src = avatar_url)
+  %h3#my-name.user-name
+    #{username}
+  %h5#my-handle.user-handle
+    #{handle}
+  %button#following-profile-button{:class => ["following-button", is_following ? "is-following" : is_self ? "is-self" : "is-not-following"], :data-userid => userid}
   .pure-g
     #my-following.pure-u-1-2
-      %h5.followlabel Following
-      %h4#followingcount.followcount [followcount]
+      %h5.followlabel
+        Following
+      %h4#followingcount.followcount 
+        #{followcount}
     #my-followers.pure-u-1-2
-      %h5.followlabel Followers
-      %h4#followercount.followcount [followercount]
+      %h5.followlabel 
+        Followers
+      %h4#followercount.followcount 
+        #{followercount}
