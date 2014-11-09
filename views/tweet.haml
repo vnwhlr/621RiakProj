@@ -1,0 +1,15 @@
+.tweet.pure-g
+  .avatar-wrapper.pure-u-1-4.pure-u-md-1-8
+    %a{:href => url('/user/')+tweet["handle"]}
+      %img.author-avatar{:alt => "img/common/missing_avatar.jpg", :src => tweet["avatarurl"]}
+  .content.pure-u-3-4.pure-u-md-7-8
+    .metadata.pure-g
+      %h5.pure-u-1-3.user-name 
+        #{tweet["name"]}
+      %h4.pure-u-1-3.user-handle
+        @#{tweet["handle"]}
+      %h6.pure-u-1-3.tweet-timestamp
+        #{tweet["timestamp"]}
+    .body-wrapper
+      %p.body
+        #{tweet["body"]}

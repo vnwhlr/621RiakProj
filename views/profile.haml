@@ -4,13 +4,17 @@
     #{username}
   %h5#my-handle.user-handle
     #{handle}
-  %button#following-profile-button{:class => ["following-button", is_following ? "is-following" : is_self ? "is-self" : "is-not-following"], :data-userid => userid}
+  .pure-g
+    .pure-u-1-4
+    %button#following-profile-button.pure-u-1-2{:class => ["following-button", user_relation, "primary-button"], "data-uid" => userid} 
+      #{profileButtonTxt(user_relation)}
+    .pure-u-1-4
   .pure-g
     #my-following.pure-u-1-2
       %h5.followlabel
         Following
       %h4#followingcount.followcount 
-        #{followcount}
+        #{followingcount}
     #my-followers.pure-u-1-2
       %h5.followlabel 
         Followers

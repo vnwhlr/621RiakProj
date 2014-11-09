@@ -234,7 +234,21 @@ a {
         width: auto; /* so that it's not 100% */
     }
 
-}
+
+/*
+ * -- LOGIN SCREEN STYLING --
+ */
+
+  #loginwrapper {
+    position : relative;
+  }
+  
+  #formwrapper {
+    position: absolute
+    top : 50%
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
 
 /*
  * -- DESKTOP (AND UP) MEDIA QUERIES --

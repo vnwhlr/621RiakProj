@@ -1,81 +1,94 @@
-module RiakClientInstance-
+class RiakClientInstance
 
-attr_accessor :client
+require 'riak'
+require 'bcrypt' 
 
-def initialize()
-  @client = Riak::Client.new(:nodes => [
-  {:host => '10.0.0.1', :pb_port => 5678}
-])
-end
+@@new_id_range = 100
 
-#TODO: check syntax, make sure i'm using the right methods, object types matching
+  attr_accessor :selfid
+  attr_accessor :client
 
+  def initialize 
+    @client = Riak::Client.new(host: '104.131.186.243', pb_port: 10017)
+  end 
 
-def processTimeline userid
-  attachUserInfo = <<JSFN
-function(value, keydata, arg)
-{
-  
-  timeline = value.values[0].metadata.Links.filter(function(l){return l[0] == 'tweets';})
-  return timeline.map(function(tweet) {return [tweet.timestamp.toInt, attachAuthorInformation(value, tweet)]}) 
-}
-JSFN
+  def retrieveTimeline(userid)
+  retrieveUserInfo = <<JSFN1
+  function(userinforval, keydata, args){
+    var userinfo = Riak.mapValues(userinforval)[0];
+    var userid = userinforval.key;
+    return[['timelines', userid, {'uid' : userid, 'userinfo' : userinfo}]];
+  }
+JSFN1
+    
+  unpackTimeline = <<JSFN2
+  function(timelinerval, userinfo, args){
+    var timeline = Riak.mapValuesJson(timelinerval)[0]['tweet_ids'];
+    return timeline.map(function(tweetid){
+      return ['tweets', tweetid, userinfo]
+    })
+ }
+JSFN2
 
+  attachTweetInfo = <<JSFN3
+  function(tweetrval, userinfo, args){
+    var tweet = Riak.mapValuesJson(tweetrval)[0];
+    return [{
+      'tid' : tweetrval.key,
+      'timestamp' : tweet.timestamp,
+      'body' : tweet.content,
+      'userinfo' : userinfo
+    }];
+  }
+JSFN3
 
-  client.index('users', 'followed_by', userid).
-    link(tag: 'timeline' keep: true).
-    map(unpackTimelines, language:javascript).
-    reduce('Riak.reduceSort', language: javascript)
-end
+  sortDescTimestamp = <<JSFN4
+  function(t1, t2)
+  {
+    return t2.timestamp - t1.timestamp;
+  }
+JSFN4
 
+    begin
+    results = Riak::MapReduce.new(@client).index('users', 'followed_by_int', userid.to_i)
+    .map(retrieveUserInfo, {:language => 'javascript'})
+    .map(unpackTimeline, {:language => 'javascript'})
+    .map(attachTweetInfo, {:language => 'javascript'})
+    .reduce('Riak.reduceSort', {:arg => sortDescTimestamp, :language => 'javascript', :keep => true}).run
+resultsf = []
 
-def attachAuthorInformation(userid, tweets)
-  begin
-    userinfo = parseAuthorInfoJSON (fetchUserInfo userid)
-    tweetArr = JSON.parse(tweets)
-    tweetArr.map {|tweet| tweet.appendAuthorInfoJson(userinfo)}
-  rescue
-    #TODO: error
+    results.each do |tw|
+         uinfo = JSON[tw['userinfo']['userinfo']]
+         oinfo = {'uid' => tw['userinfo']['uid'], 'tid' => tw['tid'], 'body' => tw['body'], 'timestamp' => tw['timestamp']}
+      resultsf.push(oinfo.merge(uinfo))
+    end
+  return resultsf
+      
+
+    rescue => exception
+      puts $!
+      puts exception.backtrace
+    end
   end
-end
 
-def appendAuthorInfoJson(userinfo, tweet)
-  tweet['userinfo'] = userinfo
-end
 
 #TODO: validate no password sibling
-def validateCredentials(email, psrd)
-  begin
-    hashed = hashpassword psrd
-    uinfoRObj = client.bucket("userinfo").get(email)
-    passwdObj = uinfoRObj.content.data
-    #TODO: this is probably JSON
-    return hashed.eql? passwdObj
-  rescue
-    #ERROR
-end
 
 
-
-def getProfile(userid)
-  begin
-    return client.bucket["users"][userid]
-  rescue
-    #TODO: error
-  end
-end
 
 #TODO: validate that users exist
 #TODO: validate that not already following
 def followUser(followerid, followeeid)
   begin
-    userBucket = client["users"]
-    if(userBucket.exists?(followee) && userBucket.exists?(follower))
-      followee = userBucket[followeeid]
-      followee.indexes['followedby'] << followeeid
-      followee.store()
-    end
+      userBucket = @client["users"]
+      if(userBucket.exists?(followeeid) && userBucket.exists?(followerid))
+        followee = userBucket[followeeid]
+        @client["users"].counter('fc_'+followerid).increment
+        followee.indexes['followed_by_int'] << followerid.to_i
+        followee.store
+      end
   rescue
+    puts $!
     #ERROR
   end
 end
@@ -84,13 +97,15 @@ end
 #TODO: validate that not already unfollowed
 def unfollowUser(unfollowerid, unfolloweeid)
   begin
-    userBucket = client["users"]
-    if(userBucket.exists?(unfollowee) && userBucket.exists?(unfollower))
-      unfollowee = userBucket[unfolloweeid]
-      unfollowee.indexes['followedby'].delete(unfolloweeid)
-      unfollowee.store()
-    end
+      userBucket = @client["users"]
+      if(userBucket.exists?(unfolloweeid) && userBucket.exists?(unfollowerid))
+        @client["users"].counter('fc_'+unfollowerid).decrement
+        unfollowee = userBucket[unfolloweeid]
+        unfollowee.indexes['followed_by_int'].delete(unfollowerid.to_i)
+        unfollowee.store
+      end
   rescue
+    puts $!
     #ERROR
   end
 end
@@ -98,62 +113,65 @@ end
 
 def createUser(uinfo)
   #TODO: generate user id. maybe goes in pre-commit hook on insertion into userinfo?
-  userinfoBucket = client.bucket("userinfo")
-  usersBucket = client.bucket("users")
-  newUID = generateNewUID()
 
+  userinfoBucket = @client["userinfo"]
+  usersBucket = @client["users"]
+  
+  uidCounter = usersBucket.counter('max_user_id') # fetch counter
+  uid = uidCounter.value + Random.new.rand(@@new_id_range) #generate new uid, randomizing to avoid collisions
+  uidCounter.increment(@@new_id_range) #increment
+
+  #create value to be stored in userinfo bucket
   userIData = {
-    :email => uinfo[:email]
-    :password => (hashpassword(uinfo[:password])
+    :email => uinfo[:email],
+    :password => hashpassword(uinfo[:password]).to_s,
+    :uid => uid.to_s
   }
+  userRInfoObj = initRObj(userinfoBucket, uinfo[:email], "application/json",userIData)
 
+  #create value to be stored in users bucket
   usersData = {
-    :handle => uinfo[:handle]
-    :name => uinfo[:name]
+    :handle => uinfo[:handle],
+    :name => uinfo[:name],
     :avatarurl => uinfo[:avatarurl]
   }
+  userRObj = initRObj(usersBucket, uid.to_s, "application/json", usersData)
 
-  userRInfoObj = initRJsonObj useribucket email "application/json" userIData
+  userTLObj = initRObj(@client["timelines"], uid.to_s, "application/json", "{}")
 
-  usersRObj = initRJsonObj usersbucket newUID "application/json" usersData
-    #password, email goes here. MAKE HASH BROWNS OUT OF THIS PASSWORD
-  usersRObj.store()
-  usersRInfoObj.store()
-  usersRObj.reload({:options => {:force}}).links << Riak::Link.new(useribucket, email, "user_data"
+  Riak::Crdt::Counter.new(@client["users"], 'fc_'+uid.to_s)
+
+  userRObj.store
+  userRInfoObj.store
+  userTLObj.store
+
+  #link user object to corresponding user info object (just in case we need it)
+  options = {:options => ['force']}
+	userRObj = userRObj.reload(options).links << Riak::Link.new(userinfoBucket, uinfo[:email], "user_data")
 end
 
-def initRJsonObj bucket key ctype rawdata
-  rObj = Riak::RObject.new(bucket, key)
-  new_one.content_type = ctype
-  new_one.raw_data = rawdata
+def initRObj(bucket, key, ctype, data)
+  rObj = bucket.new(key)
+  rObj.content_type = ctype
+  rObj.data = data
+  return rObj;
 end
 
-#TODO: put this into SUPER SECRET SECURITY module 
-#TODO: add SUPER SECRET SECURITY module
-#TODO: DO NOT forget to add SUPER SECRET SECURITY module to .gitignore
-#TODO: just kick self in the face right now because i know i'm going to forget
-#TODO: done
 def hashpassword pswd
-  Digest::SHA1.hexdigest(pswd)
-end
-
-#TODO: make strongly consistent bucket for global info.
-#TODO: probably will be a HUGE bottleneck.
-#TODO: kick self in the face for using MAX_ID + 1 equivalent
-#TODO: build this into the precommit hook instead of the application, ya dummy
-
-def generateTweetID
-  twid = clien["globalinfo"]["lastgeneratedtwid"]
-  twid.increment_and_return
+  BCrypt::Password.create(pswd)
 end
 
 #TODO: validate
 def fetchProfile userid
   begin
-    profile = client.bucket["users"][userid]
-    return profile
+    profileRObj = @client["users"][userid.to_s]
+    profileInfo = JSON[profileRObj.content.raw_data]
+    otherInfo = {'followingcount' => @client["users"].counter("fc_"+userid.to_s).value,
+      'followercount' => profileRObj.indexes["followed_by"].size,
+      'user_relation' => userid == @selfid ? "is-self" : (profileRObj.indexes["followed_by"].include?(@selfid) ? "is-following" : "is-not-following")}
+    return profileInfo.merge(otherInfo)
   rescue
-    #TODO: error
+    puts $!
   end
 end
 
@@ -168,55 +186,68 @@ end
 #TODO: change data model to mapreduce?
 def retrieveTweets userid
   begin
-    tlRObj = client["timelines"][userid]
-    tweetsrawJSON = JSON[tlRObj.content]
-    tweets_w_author = attachAuthorInformation userid tweets
-    return tweets_w_author
+    tlRObj = @client["timelines"][userid]
+    tweetids = JSON[tlRObj.content.raw_data]
+    uprofile = getProfile(userid)
+    return tweetids.map do |tweetid| 
+        tweetRObj = @client["tweets"][tweetid]
+        tweet = JSON[tweetRObj]
+        tweet.merge(uprofile).merge({"tweetid" => tweetid})
+      end
   rescue
-    #TODO: error
+    puts $!
+  end
 end
 
-#TODO: deal with tl siblings
-def postTweet userid tweetcontent
+#TODO: deal with tl siblings. would be a good candidate for a Set if it worked with M/R
+def postTweet(userid, tweetcontent)
   begin
-    if (client["users"].exists?(userid)) 
+
+    if (@client["users"].exists?(userid))
     tweet = {
-      "timestamp" => Time::now().to_i()
+      "timestamp" => Time::now().to_i(),
       "content" => tweetcontent
     } #create tweet object
-
-    tweetRObj = initRJsonObj client["tweets"] nil "application/json" tweet #create a new RObject out of our tweet (we don't know the key yet)
-    tweetRObj.store() #put in database, will autoassign key
-    tweetRObj.reload() #get object back, now with auto-assigned key
-
-    timelineRObj = client["timelines"].get_or_new("#{tweet.userid}") #get timeline object or create if doesn't exist
-    timelineRObj.raw_data = appendTweetToTimeline timelineJSON tweetRObj.key
-    timelineRObj.store()
+    tweet_id = @client["tweets"].counter('max_tweet_id').value + Random.new.rand(@@new_id_range) 
+    @client["tweets"].counter('max_tweet_id').increment(100)
+    tweetRObj = initRObj(@client["tweets"], tweet_id.to_s, "application/json", tweet) #create a new RObject out of our tweet (we don't know the key yet)
+    #increment the number of tweets. obviously not the best way to do this
+    tweetRObj.store #put in database, will autoassign key
+ 
+    timelineRObj = @client["timelines"].get_or_new(userid.to_s) #get timeline object or create if doesn't exist
+    timelineRObj.raw_data = appendTweetToTimeline(tweet_id.to_s, timelineRObj.raw_data)
+    timelineRObj.store
     else
-      #TODO: invalid user
     end
   rescue
+    puts $!
     #TODO: failure posting
   end
 end
 
-def appendTweetToTimeline tl tweetID
-  tidlist = JSON.parse(tl)
-  tidlist += tweetID
-  tlJSON['tweetids'] = JSON[tidlist]
-  return tlJSON
+def appendTweetToTimeline(tweetID, tl)
+  tidlist = JSON[tl]
+  tidlist['tweet_ids'].push(tweetID)
+  return JSON[tidlist]
 end
 
-public
-attr_accessor :client
+end
 
 
-# 
-#one: get followed users using 2i. output: list of followed userids.
-#two: map: keep data associated with userid. output: list of userids
-#three: link: follow link for each userid to timeline
-#three: foreach timeline/info value, unpack the tweetids and append the user information. output: list of tweets from all users, with attached user information, keyed on tweet id, valued on metadata + tweet id. 
-
-#[tweet id]
-#four: for each tweetid, look up the tweet id in the tweets bucket and append the tweet timestamp and content. output: list of tweets keyed on timestamp, valued on tweet content and metadata
-#five: sort the tweets by timestamp through reduction.
+module BleaterAuth
+def self.validateCredentials(email, psrd)
+  begin
+    client = Riak::Client.new(host: '104.131.186.243', pb_port: 10017)
+    uinfoRObj = client["userinfo"][email]
+    uinfo = JSON[uinfoRObj.content.raw_data]
+    if (BCrypt::Password.new(uinfo['password'])== psrd)
+      @selfid = uinfo['uid']
+      return uinfo
+    else
+      return nil
+    end
+  rescue
+    puts $!
+  end
+end
+end

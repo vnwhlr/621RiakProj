@@ -2,11 +2,13 @@ $(function(){
 	
 	function unfollow(unfolloweeid){$.post("/api/follow" + $.params(unfolloweeid));}
 	function follow(followeeid){$.post("/api/unfollow" + $.params(followeeid));}
-	function postTweet(tweetbody){$.post("/api/tweet", tweetbody);}
+	function postTweet(tweetbody){$.post("/api/tweet", {content : tweetbody});}
 	
+  function validateTweet(tweetbody){return tweetbody.length > 0 && tweetbody.length<216}
+
 	var submitbutton = $('#tweet-submit-button').first();
 		submitbutton.on('click', function(e){
-			var tweetbody = $('#tweet-input-box').first().text();
+			var tweetbody = $('#tweet-input-box').first().val();
 			if(validateTweet(tweetbody))
 			{
 				postTweet(tweetbody);
@@ -14,7 +16,7 @@ $(function(){
 		});
 
 		
-	var followbutton = $('# ').first();
+	var followbutton = $('#following-profile-button').first();
 		followbutton.on('click',
 		function(e){
 		if(!submitbutton.hasClass('is-self'))
