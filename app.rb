@@ -1,29 +1,20 @@
-require './src/ruby/riakinterface.rb'
-
-require 'sinatra/partial'
-require 'warden'
+require_relative 'riakinterface'
 require 'sinatra'
+require 'sinatra/partial'
 require 'haml'
 
-use Rack::Logger
-
-disable :reload_templates
 enable :dump_errors, :raise_errors
 set :partial_template_engine, :haml
 enable :sessions
-
-configure do
-  file = File.new("#{settings.root}/log/#{settings.environment}.log", 'a+')
-  file.sync = true
-  use Rack::CommonLogger, file
-end
-
-
 
 helpers do
 
   def logger 
     request.logger
+  end
+
+  def userid_attr userid
+    {:"data-userid" => userid}
   end
 
   def profileButtonTxt(bclass)
@@ -73,7 +64,7 @@ post '/auth/login' do
         session['userid'] = u['uid']
         redirect '/'
     else
-    logger.debug("Failed to authenticate user #{u['uid']}. Redirecting to login page")
+    logger.debug("Failed to authenticate user #{params["user"]["email"]}. Redirecting to login page")
       
         redirect '/auth/login'
     end
@@ -85,25 +76,22 @@ get '/api/timeline/:userid' do
     RiakClientInstance.new.retrieveTimeline params[:userid]
 end
 
-get '/api/tweets/:userid' do
-  logger.debug("Getting tweets of user #{params[:userid]}.")
+get '/api/bleats/:userid' do
+   logger.debug("Getting bleats of user #{params[:userid]}.")
   
-   results = RiakClientInstance.new.retrieveTweets params[:userid]
-  logger.debug("Results: #{results.inspect}")
-  results
+   results = RiakClientInstance.new.retrieveBleats params[:userid]
+   logger.debug("Results: #{results.inspect}")
+   results
 end
 
-post '/api/tweet' do
+post '/api/bleat' do
  # protected!
-   request.body.rewind
-   data = request.body.read# in case someone already read it
-   #logger.debug("Posting tweet from #{session['userid']}:\n#{data['content']}")
-  #RiakClientInstance.new.postTweet(session['userid'], data['content'])
-  JSON[request]
+   logger.debug("Posting bleat from #{session['userid']}:\n#{params['content']}")
+  RiakClientInstance.new.postBleat(session['userid'], params['content'])
 end
 
 get '/api/profile/:userid' do
-  RiakClientInstance.new.getProfile params["userid"]
+  RiakClientInstance.new.getProfile(params["userid"])
 end
 
 post '/api/follow' do
@@ -132,16 +120,20 @@ end
 
 get '/' do
     client = RiakClientInstance.new
-    myprofile = client.fetchProfile session['userid']
+    myprofile = client.fetchProfile(session['userid'], session['userid'])
     mytimeline = client.retrieveTimeline session['userid']
     haml :main, :format => :html5, :locals => {:profileinfo => myprofile,
-                                :tweets => mytimeline}
+                                :bleats => mytimeline}
   end
 
 get '/user/:userid' do
     client = RiakClientInstance.new 
-      userprofile = client.fetchProfile params[:userid]
-      usertimeline = client.retrieveTweets params[:userid]
-  haml :main, :locals => {:profileinfo => userprofile,
-                              :tweets => usertimeline}
+    if(!client.userExists?(params[:userid]))
+	return "User not found" 
+    end
+
+      userprofile = client.fetchProfile(params[:userid], session['userid'])
+      usertimeline = client.retrieveBleats params[:userid]
+  haml :main, :format => :html5, :locals => {:profileinfo => userprofile,
+                              :bleats => usertimeline}
 end

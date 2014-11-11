@@ -1,18 +1,38 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    bcrypt (3.1.9)
+    bcrypt (3.1.9-x86-mingw32)
+    ethon (0.7.1)
+      ffi (>= 1.3.0)
+    ffi (1.9.6)
+    ffi (1.9.6-x86-mingw32)
+    haml (4.0.5)
+      tilt
     rack (1.5.2)
     rack-protection (1.5.3)
       rack
+    riak (0.0.1.pre)
+      typhoeus
     sinatra (1.4.5)
       rack (~> 1.4)
       rack-protection (~> 1.4)
       tilt (~> 1.3, >= 1.3.4)
+    sinatra-partial (0.4.0)
+      sinatra
     tilt (1.4.1)
+    typhoeus (0.6.9)
+      ethon (>= 0.7.1)
 
 PLATFORMS
+  ruby
   x86-mingw32
 
 DEPENDENCIES
+  bcrypt
+  bundler
+  haml
   rack
+  riak
   sinatra
+  sinatra-partial

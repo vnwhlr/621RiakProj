@@ -1,22 +1,22 @@
-#my-profile
-  %img#my-avatar.pure-img(src = avatar_url)
-  %h3#my-name.user-name
+.profile
+  %img.avatar.pure-img(src = avatar_url)
+  %h3.name
     #{username}
-  %h5#my-handle.user-handle
-    #{handle}
+  %h5.handle
+    @#{handle}
   .pure-g
     .pure-u-1-4
-    %button#following-profile-button.pure-u-1-2{:class => ["following-button", user_relation, "primary-button"], "data-uid" => userid} 
+    %button{:class => ["pure-u-1-2", "follow-button", user_relation, "userid-"+"#{userid}", "primary-button"]} 
       #{profileButtonTxt(user_relation)}
     .pure-u-1-4
-  .pure-g
-    #my-following.pure-u-1-2
-      %h5.followlabel
+  .followstatswrapper.pure-g
+    .pure-u-1-2
+      %h5.follow-label
         Following
-      %h4#followingcount.followcount 
+      %h4.followingcount.follow-count 
         #{followingcount}
-    #my-followers.pure-u-1-2
-      %h5.followlabel 
+    .pure-u-1-2
+      %h5.follow-label 
         Followers
-      %h4#followercount.followcount 
+      %h4.followercount.follow-count 
         #{followercount}

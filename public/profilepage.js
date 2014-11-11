@@ -1,35 +1,52 @@
 $(function(){
 	
-	function unfollow(unfolloweeid){$.post("/api/follow" + $.params(unfolloweeid));}
-	function follow(followeeid){$.post("/api/unfollow" + $.params(followeeid));}
-	function postTweet(tweetbody){$.post("/api/tweet", {content : tweetbody});}
+	function unfollow(unfolloweeid){$.post("/api/unfollow?" + $.param({"unfollowee" : unfolloweeid}));}
+	function follow(followeeid){$.post("/api/follow?" + $.param({"followee" : followeeid}));}
+	function postBleat(bleatbody){$.post("/api/bleat", {content : bleatbody});}
 	
-  function validateTweet(tweetbody){return tweetbody.length > 0 && tweetbody.length<216}
+  function validateBleat(bleatbody){return bleatbody.length > 0 && bleatbody.length<216}
 
-	var submitbutton = $('#tweet-submit-button').first();
+	var submitbutton = $('#ldash .bleat-submit').first();
 		submitbutton.on('click', function(e){
-			var tweetbody = $('#tweet-input-box').first().val();
-			if(validateTweet(tweetbody))
+			var bleatbody = $('#ldash .bleat-input-box').first().val();
+			if(validateBleat(bleatbody))
 			{
-				postTweet(tweetbody);
+				postBleat(bleatbody);
 			}
 		});
 
 		
-	var followbutton = $('#following-profile-button').first();
+	var followbutton = $('#ldash .profile .follow-button').first();
 		followbutton.on('click',
 		function(e){
 		if(!submitbutton.hasClass('is-self'))
 		{
-			var userid = $(this).first().attr('data-userid');	
-			if(submitbutton.hasClass('is-following'))
-			{unfollow(userid);}
-			else if(submitbutton.hasClass('is-not-following'))
-			{follow(userid);}
+       //haml refuses to generate a data- attribute so WE GOTTA DO THIS THE HARD WAY
+      var userclass = $(this).attr('class').split(/\s+/).filter(function(classname){return classname.lastIndexOf("userid-") != -1});
+      var userid = null;
+      if(!userclass.isEmpty)
+      {
+        userid =parseInt(userclass[0].split('-')[1])
+      }
+      else
+      {
+        console.log("failed to extract user id");
+        return;
+      }
+			if($(this).hasClass('is-following'))
+			{
+        unfollow(userid);
+        $(this).text("Not following")
+      }
+			else if($(this).hasClass('is-not-following'))
+			{ 
+        follow(userid);
+        $(this).text("Following")
+      }
 			else
 			{return;}
-			submitbutton.toggleClass('is-following');
-			submitbutton.toggleClass('is-not-following');
+			$(this).toggleClass('is-following');
+		  $(this).toggleClass('is-not-following');
 		}
 	});
 }

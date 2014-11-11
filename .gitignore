@@ -1,9 +1,11 @@
 /src/dbscripts
 /src/hooks
+/src/ruby
 /planning
-www/css/pure
+/log
 *.swp
 *.swo
 *.un~
 *~
+*.zip
 

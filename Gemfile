@@ -1,3 +1,8 @@
 source 'https://rubygems.org'
+gem 'bundler'
+gem 'haml'
 gem 'rack'
+gem 'riak'
 gem 'sinatra'
+gem 'sinatra-partial'
+gem 'bcrypt'
