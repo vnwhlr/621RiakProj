@@ -1,19 +1,16 @@
 #Class representing an instance of a connection to the database.
-class RiakClientInstance
-
-require 'riak'
+require 'rubygems'
 require 'bcrypt'
+require 'riak'
+
+class RiakClientInstance
 
 #Constant determining how much we increment the counter whenever we create a new user.
 @@new_id_range = 100
-
-
-  attr_accessor :client
-
   #Initialize this class by creating a connection to our database.
   #This uses the Protocol Buffers API.
-  def initialize 
-    @client = Riak::Client.new(host: '104.131.186.243', pb_port: 10017)
+  def initialize(dbconf)
+    @client = Riak::Client.new(host: dbconf['host'], pb_port: dbconf['port'])
   end 
 
   #Given a user id, get the bleats from all users they follow.
@@ -115,7 +112,7 @@ def followUser(followerid, followeeid)
       if(userBucket.exists?(followeeid) && userBucket.exists?(followerid))
         followee = userBucket[followeeid] #Fetch the followee object from the /users bucket.
         return if followee.indexes['followed_by_int'].include?(followerid.to_i)
-        @client["users"].counter('fc_'+followerid).increment #Increment the following count counter. (This is a CRDT)
+        @client["users"].counter('fc_'+followerid).increment unless followeeid.eql?(followerid)#Increment the following count counter. (This is a CRDT)
         followee.indexes['followed_by_int'] << followerid.to_i #Add the followerid to the index.
         followee.store #Put the followee object back in the database.
       end
@@ -189,8 +186,10 @@ def createUser(uinfo)
   userTLObj.store
 
   #Link user object to corresponding user info object (just in case we need it)
-  options = {:options => ['force']}
-	userRObj = userRObj.reload(options).links << Riak::Link.new(userinfoBucket, uinfo[:email], "user_data")
+  userRObj.reload
+  userRObj.links << Riak::Link.new(userinfoBucket, uinfo[:email], "user_data")
+	userRObj.indexes["followed_by_int"] << uid
+	userRObj.store
 end
 
 #Helper function to create an Riak Object out of data.
@@ -219,10 +218,8 @@ def fetchProfile(userid,myid=nil)
     otherInfo = {
       'uid' => userid,
       'followingcount' => @client["users"].counter("fc_"+userid.to_s).value,
-      'followercount' => profileRObj.indexes["followed_by_int"].length,
+      'followercount' => profileRObj.indexes["followed_by_int"].length-1,
       'user_relation' => (myid ? (userid == myid ? "is-self" : (profileRObj.indexes["followed_by_int"].include?(myid.to_i) ? "is-following" : "is-not-following")) : "unknown")}
-    puts profileInfo.inspect
-    puts otherInfo.inspect
     #Return all the information merged together
     return profileInfo.merge(otherInfo)
   rescue
@@ -300,7 +297,7 @@ end
 #Helper method to append the bleat id.
 def appendBleatToTimeline(bleatID, tl)
   tidlist = JSON[tl]
-  tidlist["bleat_ids"].push(bleatID)
+  tidlist["bleat_ids"].unshift(bleatID)
   return JSON[tidlist]
 end
 
